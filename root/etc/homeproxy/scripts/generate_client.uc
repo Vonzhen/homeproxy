@@ -959,15 +959,22 @@ if (!isEmpty(main_node)) {
 /* Routing rules end */
 
 /* Experimental start */
-if (routing_mode in ['bypass_mainland_china', 'custom']) {
-	config.experimental = {
-		cache_file: {
-			enabled: true,
-			path: RUN_DIR + '/cache.db',
-			store_rdrc: strToBool(cache_file_store_rdrc),
-			rdrc_timeout: strToTime(cache_file_rdrc_timeout),
-		}
-	};
+const clash_api_port = uci.get(uciconfig, ucimain, 'clash_api_port');
+const clash_api_host = uci.get(uciconfig, ucimain, 'clash_api_host') || '0.0.0.0';
+
+if (routing_mode in ['bypass_mainland_china', 'custom'] || !isEmpty(clash_api_port)) {
+    config.experimental = {
+        cache_file: (routing_mode in ['bypass_mainland_china', 'custom']) ? {
+            enabled: true,
+            path: RUN_DIR + '/cache.db',
+            store_rdrc: strToBool(cache_file_store_rdrc),
+            rdrc_timeout: strToTime(cache_file_rdrc_timeout),
+        } : null,
+        
+        clash_api: !isEmpty(clash_api_port) ? {
+            external_controller: sprintf('%s:%s', clash_api_host, clash_api_port)
+        } : null
+    };
 }
 /* Experimental end */
 
