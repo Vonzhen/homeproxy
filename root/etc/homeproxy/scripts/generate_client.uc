@@ -4,9 +4,8 @@
  *
  * Copyright (C) 2023-2025 ImmortalWrt.org
  * Modified for Sing-box 1.14.0 Schema Compliance & Pure Smart Tail
- * Fix 1: Fixed ucode array iteration bug (yields values, not indices)
- * Fix 2: Removed anti-loopback rule per user request
- * Fix 3: Strict 1.14 syntax (No strategy/outbound in dns.rules)
+ * Feature: Dynamic Prober for GeoIP-CN (UI Priority with Remote Fallback)
+ * Note: Adblock removed per user request (handled via UI)
  */
 
 'use strict';
@@ -347,6 +346,30 @@ if (!isEmpty(ntp_server))
         domain_resolver: 'default-dns',
     };
 
+/* ========================================================================= */
+/* 🚀 动态探测器 (Dynamic Prober): 仅探测 GeoIP-CN，优先读取 UI，无则兜底 🚀 */
+/* ========================================================================= */
+let active_geoip_cn_tag = 'geoip-cn';
+let inject_geoip_cn_ruleset = true;
+
+if (routing_mode === 'custom') {
+    uci.foreach(uciconfig, uciruleset, (cfg) => {
+        if (cfg.enabled !== '1') return;
+        let r_name = lc(cfg['.name'] || '');
+        let r_url = lc(cfg.url || '');
+        let r_path = lc(cfg.path || '');
+        
+        // 发现 UI 里的国内 IP 库
+        if (match(r_name, /geoipcn/) || match(r_url, /cn\.srs/) || match(r_path, /cn\.srs/)) {
+            active_geoip_cn_tag = 'cfg-' + cfg['.name'] + '-rule';
+            inject_geoip_cn_ruleset = false; // 找到则无需底层兜底注入
+        }
+    });
+} else if (routing_mode === 'bypass_mainland_china') {
+    inject_geoip_cn_ruleset = false; // Bypass自带，不需重复注入
+}
+/* ========================================================================= */
+
 /* DNS start */
 config.dns = {
     servers: [
@@ -357,7 +380,6 @@ config.dns = {
     strategy: dns_default_strategy,
     disable_cache: strToBool(dns_disable_cache),
     disable_expire: strToBool(dns_disable_cache_expire),
-    /* FIX 1.14: independent_cache removed */
     client_subnet: dns_client_subnet
 };
 
@@ -399,21 +421,21 @@ if (!isEmpty(main_node)) {
     config.dns.final = 'main-dns';
 } else if (!isEmpty(default_outbound)) {
 
-    /* 🚀 终极智能提取：解决 Ucode 数组坑点，100% 精准映射 🚀 */
+    /* 🚀 精准提取 local_dns_tag 和 remote_dns_tag 🚀 */
     let local_dns_tag = get_resolver(dns_default_server) || 'default-dns';
     let remote_dns_tag = get_resolver(default_outbound_dns) || 'main-dns';
 
     uci.foreach(uciconfig, ucidnsrule, (cfg) => {
         if (cfg.enabled !== '1') return;
-        
-        // Ucode bugfix: for..in over an array yields VALUES, not indices.
         let rule_set_array = (type(cfg.rule_set) === 'array') ? cfg.rule_set : (cfg.rule_set ? [cfg.rule_set] : []);
-        
-        for (let val in rule_set_array) {
+        for (let i = 0; i < length(rule_set_array); i++) {
+            let val = rule_set_array[i];
             if (val === 'geositecn' || val === 'geoipcn' || val === 'geositeprivatedirect') {
-                local_dns_tag = get_resolver(cfg.server); // 准确抓取你的 PaoPaoDNS/LocalDNS
+                let s = get_resolver(cfg.server);
+                if (s) local_dns_tag = s;
             } else if (val === 'geositenoncn' || val === 'geositeapple') {
-                remote_dns_tag = get_resolver(cfg.server); // 准确抓取你的 Cloudflare/RemoteDNS
+                let s = get_resolver(cfg.server);
+                if (s) remote_dns_tag = s;
             }
         }
     });
@@ -462,11 +484,8 @@ if (!isEmpty(main_node)) {
             user: cfg.user,
             rule_set: get_ruleset(cfg.rule_set),
             invert: strToBool(cfg.invert),
-            
-            /* 1.14 STRICT FIX: NO 'outbound' or 'strategy' in dns.rules */
             action: cfg.action,
             server: get_resolver(cfg.server),
-            
             disable_cache: strToBool(cfg.dns_disable_cache),
             rewrite_ttl: strToInt(cfg.rewrite_ttl),
             client_subnet: cfg.client_subnet,
@@ -481,23 +500,21 @@ if (!isEmpty(main_node)) {
 
     /* 🚀 Pure Smart Tail Injection 🚀 */
     
-    // Perfect alignment with your mobile JSON: 
-    // evaluate -> Remote DNS | match_response -> Local DNS
     let pure_evaluate_tail = [
         { action: 'evaluate', server: remote_dns_tag },
-        { action: 'route', match_response: true, rule_set: 'cfg-geoipcn-rule', server: local_dns_tag },
+        { action: 'route', match_response: true, rule_set: active_geoip_cn_tag, server: local_dns_tag },
         { action: 'respond' }
     ];
 
     if (!config.dns.rules) config.dns.rules = [];
     config.dns.rules = [...config.dns.rules, ...pure_evaluate_tail];
 
-    /* Ultimate Fallback: Strictly mapped to [DNS Settings -> Default DNS Server] */
+    /* Ultimate Fallback: Strictly read from [DNS settings -> default_server] */
     config.dns.final = get_resolver(dns_default_server) || 'default-dns';
 }
 /* DNS end */
 
-/* Inbound start - Sniff completely removed per 1.13 schema */
+/* Inbound start */
 config.inbounds = [];
 
 push(config.inbounds, { type: 'direct', tag: 'dns-in', listen: '::', listen_port: int(dns_port) });
@@ -645,7 +662,6 @@ if (!isEmpty(main_node)) {
         push(config.route.rule_set, { type: 'remote', tag: 'geosite-noncn', format: 'binary', url: 'https://fastly.jsdelivr.net/gh/1715173329/sing-geosite@rule-set-unstable/geosite-geolocation-!cn.srs', download_detour: 'main-out' });
     }
 
-    if (isEmpty(config.route.rule_set)) config.route.rule_set = null;
 } else if (!isEmpty(default_outbound)) {
 
     config.route.default_domain_resolver = {
@@ -681,6 +697,21 @@ if (!isEmpty(main_node)) {
         });
     });
 }
+
+/* 🚀 规则集依赖底层防呆补全 (Fallback Ruleset for GeoIP-CN) 🚀 */
+if (!config.route.rule_set) config.route.rule_set = [];
+
+if (inject_geoip_cn_ruleset) {
+    push(config.route.rule_set, {
+        type: 'remote', 
+        tag: active_geoip_cn_tag, 
+        format: 'binary', 
+        url: 'https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geoip/cn.srs', 
+        download_detour: !isEmpty(main_node) ? 'main-out' : (get_outbound(default_outbound) || 'direct-out')
+    });
+}
+
+if (isEmpty(config.route.rule_set)) config.route.rule_set = null;
 /* Routing rules end */
 
 /* Experimental start */
