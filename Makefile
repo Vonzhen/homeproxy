@@ -31,7 +31,7 @@ define Package/luci-app-homeproxy/install
 	$(INSTALL_BIN) ./root/etc/homeproxy/scripts/hp_kernel.sh $(1)/etc/homeproxy/scripts/hp_kernel.sh
 	
 	$(INSTALL_DIR) $(1)/usr/share/homeproxy
-	$(INSTALL_BIN) ./root/usr/share/homeproxy/generate_node_groups.uc $(1)/usr/share/homeproxy/generate_node_groups.uc
+	$(INSTALL_BIN) ./root/etc/homeproxy/scripts/generate_node_groups.uc $(1)/etc/homeproxy/scripts/generate_node_groups.uc
 endef
 
 # 🌟 保留 postinst 作为双重保险
@@ -40,7 +40,7 @@ define Package/luci-app-homeproxy/postinst
 if [ -z "$${IPKG_INSTROOT}" ]; then
 	chmod 755 /etc/homeproxy/scripts/hp_assets.sh 2>/dev/null
 	chmod 755 /etc/homeproxy/scripts/hp_kernel.sh 2>/dev/null
-	chmod 755 /usr/share/homeproxy/generate_node_groups.uc 2>/dev/null
+	chmod 755 /etc/homeproxy/scripts/generate_node_groups.uc 2>/dev/null
 	# 物理注册 UCI
 	if ! uci -q get homeproxy.assets >/dev/null; then
 		uci set homeproxy.assets=assets
