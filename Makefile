@@ -31,7 +31,7 @@ define Package/luci-app-homeproxy/install
 	$(INSTALL_BIN) ./root/etc/homeproxy/scripts/hp_kernel.sh $(1)/etc/homeproxy/scripts/hp_kernel.sh
 	
 	$(INSTALL_DIR) $(1)/usr/share/homeproxy
-	$(INSTALL_BIN) ./root/usr/share/homeproxy/generate_node_groups.uc $(1)/usr/share/homeproxy/generate_node_groups.uc
+	$(INSTALL_BIN) ./root/etc/homeproxy/scripts/generate_node_groups.uc $(1)/etc/homeproxy/scripts/generate_node_groups.uc
 endef
 
 # 🌟 保留 postinst 作为双重保险
