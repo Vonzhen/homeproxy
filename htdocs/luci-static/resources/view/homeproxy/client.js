@@ -75,16 +75,24 @@ let stubValidator = {
 
 return view.extend({
     load() {
-        return Promise.all([
-            uci.load('homeproxy'),
-            hp.getBuiltinFeatures(),
-            network.getHostHints()
-        ]).then(responses => {
-            /* 🌟 核心防御：如果配置里没有 assets 节点，直接内存注册，防止页面空白 */
-            if (!uci.get('homeproxy', 'assets')) {
-                uci.set('homeproxy', 'assets', 'assets');
-            }
-            return responses;
+        /* 🚀 强力初始化补丁：解决权限丢失与 UI 空白问题 */
+        return L.resolveDefault(L.fs.exec_direct('sh', ['-c', `
+            # 1. 强制物理注册 UCI 节点（防止页面空白）
+            if ! uci -q get homeproxy.assets >/dev/null; then
+                uci set homeproxy.assets=assets
+                uci commit homeproxy
+            fi
+            # 2. 强制修复脚本执行权限
+            chmod +x /etc/homeproxy/scripts/hp_assets.sh 2>/dev/null
+            chmod +x /etc/homeproxy/scripts/hp_kernel.sh 2>/dev/null
+            chmod +x /usr/share/homeproxy/generate_node_groups.uc 2>/dev/null
+        `]), {}).then(() => {
+            /* 执行原本的加载逻辑 */
+            return Promise.all([
+                uci.load('homeproxy'),
+                hp.getBuiltinFeatures(),
+                network.getHostHints()
+            ]);
         });
     },
 

@@ -176,6 +176,10 @@ function getRuntimeLog(o, name, _option_index, section_id, _in_table) {
 }
 
 return view.extend({
+	load() {
+        // 同样在服务状态页也执行一次权限修复，确保万无一失
+        return L.fs.exec_direct('chmod', ['+x', '/etc/homeproxy/scripts/hp_kernel.sh']).catch(()=>{});
+    },
     render() {
         let m, s, o;
 
