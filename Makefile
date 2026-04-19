@@ -40,7 +40,7 @@ define Package/luci-app-homeproxy/postinst
 if [ -z "$${IPKG_INSTROOT}" ]; then
 	chmod 755 /etc/homeproxy/scripts/hp_assets.sh 2>/dev/null
 	chmod 755 /etc/homeproxy/scripts/hp_kernel.sh 2>/dev/null
-	chmod 755 /usr/share/homeproxy/generate_node_groups.uc 2>/dev/null
+	chmod 755 /etc/homeproxy/scripts/generate_node_groups.uc 2>/dev/null
 	# 物理注册 UCI
 	if ! uci -q get homeproxy.assets >/dev/null; then
 		uci set homeproxy.assets=assets
