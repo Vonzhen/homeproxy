@@ -12,6 +12,7 @@
 'require uci';
 'require validation';
 'require view';
+'require fs';
 
 'require homeproxy as hp';
 'require tools.firewall as fwtool';
@@ -78,7 +79,13 @@ return view.extend({
             uci.load('homeproxy'),
             hp.getBuiltinFeatures(),
             network.getHostHints()
-        ]);
+        ]).then(responses => {
+            /* 🌟 核心防御：如果配置里没有 assets 节点，直接内存注册，防止页面空白 */
+            if (!uci.get('homeproxy', 'assets')) {
+                uci.set('homeproxy', 'assets', 'assets');
+            }
+            return responses;
+        });
     },
 
     render(data) {
@@ -1305,7 +1312,177 @@ return view.extend({
             _('Match process path using regular expression.'));
         so.modalonly = true;
         /* DNS rules end */
-        /* Custom routing settings end */
+
+
+        /* ========================================================= */
+        /* 🚀 规则资产 (Assets) 注入区 - 开始 🚀 */
+        /* ========================================================= */
+        s.tab('assets', _('规则集设置'));
+        o = s.taboption('assets', form.SectionValue, '_assets', form.NamedSection, 'assets', 'homeproxy');
+        ss = o.subsection;
+
+        /* 原生终端拉起函数 */
+        let runAssetsTerminal = function(cmd, arg, titleText) {
+            Promise.all([
+                L.require('ui'),
+                L.require('fs')
+            ]).then(function(modules) {
+                let ui = modules[0];
+                let fs = modules[1];
+
+                let status_txt = E('p', { 'class': 'spinning', 'style': 'font-weight:bold; margin-bottom:10px;' }, titleText);
+                let log_pre = E('pre', { 'style': 'width: 100%; height: 300px; overflow-y: auto; background: #1e1e1e; color: #4af626; padding: 10px; font-family: monospace; font-size: 12px; border-radius: 4px; white-space: pre-wrap; word-wrap: break-word;' }, '初始化 Assets 引擎...\n');
+                let close_btn = E('button', { 'class': 'cbi-button cbi-button-action', 'style': 'display: none; margin-top: 15px;', 'click': () => location.reload() }, '关闭并刷新');
+
+                ui.showModal('💻 规则资产终端', [ status_txt, log_pre, close_btn ]);
+
+                let log_timer = setInterval(() => {
+                    fs.exec_direct('tail', ['-n', '20', '/tmp/hp_assets_temp/log_output']).then((log_data) => {
+                        if (log_data && log_pre.textContent !== log_data) {
+                            log_pre.textContent = log_data;
+                            log_pre.scrollTop = log_pre.scrollHeight;
+                        }
+                    }).catch(() => {});
+                }, 1000);
+
+                fs.exec_direct('sh', ['-c', 'mkdir -p /tmp/hp_assets_temp && /etc/homeproxy/scripts/hp_assets.sh ' + cmd + ' ' + arg + ' > /tmp/hp_assets_temp/log_output 2>&1']).then(() => {
+                    clearInterval(log_timer);
+                    return fs.exec_direct('cat', ['/tmp/hp_assets_temp/log_output']);
+                }).then((final_log) => {
+                    if (final_log) log_pre.textContent = final_log;
+                    status_txt.className = '';
+                    status_txt.style.color = '#28a745';
+                    status_txt.innerHTML = '✅ 任务执行完毕！';
+                    log_pre.scrollTop = log_pre.scrollHeight;
+                    close_btn.style.display = 'inline-block';
+                }).catch((err) => {
+                    clearInterval(log_timer);
+                    status_txt.className = '';
+                    status_txt.style.color = '#dc3545';
+                    status_txt.innerHTML = '❌ 执行异常！';
+                    log_pre.style.color = '#dc3545';
+                    log_pre.textContent += '\n\n[FATAL ERROR] ' + err;
+                    close_btn.style.display = 'inline-block';
+                });
+            });
+        };
+
+        /* 用于联动更新 Crontab 的通用回调 */
+        let sync_cron_job = function(section_id, ctx) {
+            let is_auto = ctx.section.formvalue(section_id, 'auto_update');
+            let update_time = ctx.section.formvalue(section_id, 'update_time') || '4';
+            let cron_time = `0 ${update_time} * * *`;
+            let cron_cmd = (is_auto === '1') ? 
+                `sed -i '/hp_assets.sh/d' /etc/crontabs/root 2>/dev/null; echo "${cron_time} /bin/sh /etc/homeproxy/scripts/hp_assets.sh --update auto" >> /etc/crontabs/root; /etc/init.d/cron restart` :
+                `sed -i '/hp_assets.sh/d' /etc/crontabs/root 2>/dev/null; /etc/init.d/cron restart`;
+            L.require('fs').then(fs => fs.exec_direct('sh', ['-c', cron_cmd]));
+        };
+
+        /* -- 基础配置区块 -- */
+        so = ss.option(form.DummyValue, '_header_1', '');
+        so.rawhtml = true;
+        so.default = '<div style="padding: 8px 15px; margin-top: 10px; margin-bottom: 20px; background-color: #f8f9fa; border-left: 4px solid #17a2b8; border-radius: 4px; font-weight: bold; color: #333; font-size: 15px;">⚙️ 基础配置</div>';
+
+        // 🌟 新增：节点展示名称
+        so = ss.option(form.Value, 'location_name', _('节点名称'), '用于在 Telegram 通知中区分不同的路由器。');
+        so.default = 'HomeProxy';
+        so.placeholder = '如：家里主路由、公司软路由';
+
+        so = ss.option(form.Value, 'base_url', _('镜像源 URL'), '公有库下载源，推荐使用 jsDelivr 或国内加速源。');
+        so.default = 'https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing';
+        so.placeholder = 'https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing';
+
+        so = ss.option(form.Value, 'private_repo', _('私有库 URL'), '用于下载自定义 SRS 的私有直链前缀（可选）。');
+        so.placeholder = 'https://raw.githubusercontent.com/YourName/Repo/main';
+
+        so = ss.option(form.Flag, 'auto_update', _('自动更新开关'), '开启后将按设定的时间自动在后台检查更新。');
+        so.rmempty = false;
+        so.write = function(section_id, value) {
+            let res = this.super('write', section_id, value);
+            sync_cron_job(section_id, this);
+            return res;
+        };
+
+        // 🌟 优化：将生硬的 Cron 改为每日小时选择器
+        so = ss.option(form.ListValue, 'update_time', _('每日更新时间'), '设定自动更新在每天的几点执行。');
+        for (let i = 0; i < 24; i++) so.value(i, i + ':00');
+        so.default = '4';
+        so.depends('auto_update', '1');
+        so.write = function(section_id, value) {
+            let res = this.super('write', section_id, value);
+            sync_cron_job(section_id, this);
+            return res;
+        };
+
+        so = ss.option(form.Value, 'tg_bot_token', _('TG Bot Token'), 'Telegram 机器人令牌 (可选，用于战报推送)。');
+        so.password = true;
+
+        so = ss.option(form.Value, 'tg_chat_id', _('TG Chat ID'), '接收通知的频道或用户 ID。');
+
+        /* -- 手动入库区块 -- */
+        so = ss.option(form.DummyValue, '_header_2', '');
+        so.rawhtml = true;
+        so.default = '<div style="padding: 8px 15px; margin-top: 30px; margin-bottom: 20px; background-color: #f8f9fa; border-left: 4px solid #007bff; border-radius: 4px; font-weight: bold; color: #333; font-size: 15px;">📥 批量入库引擎</div>';
+
+        so = ss.option(form.DummyValue, '_manual_pull_ui', _('规则集名称'));
+        so.description = '支持同时输入多个规则集名称，请用<b>逗号或换行</b>分隔。<br/>脚本会自动从配置的源批量拉取资产文件。';
+        so.renderWidget = function(section_id, option_index, cfgvalue) {
+            // 🌟 优化：将单行输入框改为多行文本框 Textarea
+            return E('div', { 'style': 'display:flex; align-items:flex-start;' }, [
+                E('textarea', { 
+                    'id': 'manual_rule_name_input', 
+                    'class': 'cbi-input-textarea', 
+                    'placeholder': 'geosite-google\ngeoip-netflix\ngeosite-cn', 
+                    'style': 'flex: 1; max-width: 350px; min-height: 80px; padding: 8px;' 
+                }),
+                E('button', {
+                    'class': 'cbi-button cbi-button-apply',
+                    'style': 'margin-left: 15px; margin-top: 5px;',
+                    'click': function(ev) {
+                        ev.preventDefault();
+                        let val = document.getElementById('manual_rule_name_input').value.trim();
+                        if (!val) { alert('请输入要下载的规则集名称！'); return; }
+                        
+                        // 🌟 将用户的逗号、换行全部替换为单空格，拼装成多参数供 Shell 执行
+                        let clean_args = val.replace(/[\n,]/g, ' ').replace(/\s+/g, ' ');
+                        runAssetsTerminal('--download', clean_args, '📥 正在执行批量入库任务...');
+                    }
+                }, '批量入库')
+            ]);
+        };
+
+        /* -- 维护容灾区块 -- */
+        so = ss.option(form.DummyValue, '_header_3', '');
+        so.rawhtml = true;
+        so.default = '<div style="padding: 8px 15px; margin-top: 30px; margin-bottom: 20px; background-color: #f8f9fa; border-left: 4px solid #dc3545; border-radius: 4px; font-weight: bold; color: #333; font-size: 15px;">🛠️ 维护与容灾</div>';
+
+        so = ss.option(form.DummyValue, '_maintenance_ui', _('高级操作'));
+        so.description = '<b>全量更新：</b>自动扫描当前 HomeProxy 正在使用的规则集并执行按需更新。<br/><b>安全回滚：</b>遇到更新后中断，一键恢复至上一个版本的稳定规则集。';
+        so.renderWidget = function(section_id, option_index, cfgvalue) {
+            return E('div', { 'style': 'display:flex; gap:15px;' }, [
+                E('button', {
+                    'class': 'cbi-button cbi-button-action',
+                    'style': 'background-color: #28a745; color: #fff; border-color: #28a745; padding: 6px 15px;',
+                    'click': function(ev) {
+                        ev.preventDefault();
+                        runAssetsTerminal('--update', 'manual', '🔄 正在执行全量规则巡检...');
+                    }
+                }, '🔄 全量规则集更新'),
+                E('button', {
+                    'class': 'cbi-button cbi-button-remove',
+                    'style': 'padding: 6px 15px;',
+                    'click': function(ev) {
+                        ev.preventDefault();
+                        if(confirm('⚠️ 危险操作：\n\n确定要执行紧急安全回滚吗？\n这将覆盖当前所有的规则集，恢复到上一次的安全备份，并重启 HomeProxy 服务！')) {
+                            runAssetsTerminal('--restore', '', '🛡️ 正在执行紧急安全回滚...');
+                        }
+                    }
+                }, '🛡️ 紧急安全回滚')
+            ]);
+        };
+        /* ========================================================= */
+        /* 🚀 规则资产 (Assets) 注入区 - 结束 🚀 */
+        /* ========================================================= */
 
         /* Rule set settings start */
         s.tab('ruleset', _('Rule Set'));
