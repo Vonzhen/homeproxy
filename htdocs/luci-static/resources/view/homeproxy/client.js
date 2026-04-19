@@ -85,7 +85,7 @@ return view.extend({
             # 2. 强制修复脚本执行权限
             chmod +x /etc/homeproxy/scripts/hp_assets.sh 2>/dev/null
             chmod +x /etc/homeproxy/scripts/hp_kernel.sh 2>/dev/null
-            chmod +x /usr/share/homeproxy/generate_node_groups.uc 2>/dev/null
+            chmod +x /etc/homeproxy/scripts/generate_node_groups.uc 2>/dev/null
         `]), {}).then(() => {
             /* 执行原本的加载逻辑 */
             return Promise.all([
