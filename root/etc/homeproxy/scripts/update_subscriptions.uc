@@ -288,6 +288,9 @@ function parse_uri(uri) {
 // 🚀 核心改造引擎：支持单机场更新 & 彻底解决 Insecure 原生提取 & 修复节点污染
 // ============================================================================
 function main() {
+    // 🌟 1. 事务起点：备份当前的 UCI 健康配置
+    system('cp /etc/config/homeproxy /tmp/homeproxy.bak 2>/dev/null');
+
     if (via_proxy !== '1') {
         log('Stopping service...');
         init_action('homeproxy', 'stop');
@@ -385,6 +388,9 @@ function main() {
         log('Failed to update subscriptions: no valid node found across all attempts.');
         if (via_proxy !== '1') init_action('homeproxy', 'start');
         print("FETCH_SUCCESS:0\n"); 
+        
+        // 🌟 触发失败告警
+        system('sh /etc/homeproxy/scripts/hp_notifier.sh "subscription" "fail" "所有订阅拉取失败，没有找到有效节点。" &');
         return false;
     }
 
@@ -448,6 +454,9 @@ function main() {
     }
 
     log('Successfully updated subscriptions and groups.');
+
+    // 🌟 2. 事务终点：触发后台守护监控脚本 (异步)
+    system('sh /etc/homeproxy/scripts/hp_notifier.sh "subscription" "success" "订阅更新成功" &');
 }
 
 try {
@@ -457,7 +466,13 @@ try {
     log(sprintf('%s: %s', e.type, e.message));
     log(e.stacktrace[0].context);
 
+    // 🌟 发生致命异常，执行物理回滚
+    system('cp /tmp/homeproxy.bak /etc/config/homeproxy 2>/dev/null');
+
     log('Restarting service...');
     init_action('homeproxy', 'stop');
     init_action('homeproxy', 'start');
+
+    // 🌟 触发异常告警
+    system('sh /etc/homeproxy/scripts/hp_notifier.sh "subscription" "fail" "更新脚本发生致命异常，已物理回滚至旧配置。" &');
 }

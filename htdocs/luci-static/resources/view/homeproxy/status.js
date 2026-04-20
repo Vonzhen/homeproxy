@@ -344,6 +344,50 @@ return view.extend({
             return node;
         }
 
+        /* ========================================================= */
+        /* 🚀 📢 统一消息中心：Telegram 告警配置 - 开始 🚀 */
+        /* ========================================================= */
+        // 🌟 使用 LuCI 原生的 Section 构建，样式与"资源管理"绝对一致
+        s = m.section(form.NamedSection, 'config', 'homeproxy', '📢 统一消息中心 (Telegram)');
+        s.anonymous = true;
+
+        o = s.option(form.Flag, 'tg_notify_enabled', '启用 Telegram 自动告警', 
+            '统一接管订阅更新、规则集更新以及服务崩溃监控。所有脚本将读取此处的配置进行通讯。');
+
+        o = s.option(form.Value, 'location_name', '路由器名称', '用于在通知头部区分不同的设备。');
+        o.default = 'HomeProxy';
+        o.placeholder = '如：家里主路由、公司软路由';
+        o.depends('tg_notify_enabled', '1');
+
+        o = s.option(form.ListValue, 'tg_notify_mode', '通知触发策略');
+        o.value('always', '总是通知 (成功与失败均发送)');
+        o.value('fail_only', '静默模式 (仅在发生错误、中断或回滚时才通知)');
+        o.default = 'always';
+        o.depends('tg_notify_enabled', '1');
+
+        o = s.option(form.Value, 'tg_token', 'Bot Token', '填入你的 TG 机器人 Token。');
+        o.password = true;
+        o.depends('tg_notify_enabled', '1');
+        
+        // 我们也为 Token 输入框加一个保存按钮，方便直接提交测试
+        o.renderWidget = function() {
+            let node = form.Value.prototype.renderWidget.apply(this, arguments);
+            (node.querySelector('.control-group') || node).appendChild(E('button', {
+                'class': 'cbi-button cbi-button-apply',
+                'title': '保存',
+                'click': ui.createHandlerFn(this, () => {
+                    return this.map.save(null, true).then(() => { ui.changes.apply(true); });
+                }, this.option)
+            }, [ '保存' ]));
+            return node;
+        }
+
+        o = s.option(form.Value, 'tg_chat_id', 'Chat ID', '填入接收消息的频道或用户 ID。');
+        o.depends('tg_notify_enabled', '1');
+        /* ========================================================= */
+        /* 🚀 📢 统一消息中心：Telegram 告警配置 - 结束 🚀 */
+        /* ========================================================= */
+
         s = m.section(form.NamedSection, 'config', 'homeproxy');
         s.anonymous = true;
 

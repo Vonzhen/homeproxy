@@ -1214,56 +1214,117 @@ return view.extend({
 
         s = m.section(form.NamedSection, 'subscription', 'homeproxy');
 
-        /* === Subscriptions settings start (🔥 前置到第一位) === */
+        /* === Subscriptions settings start === */
         s.tab('subscription', '订阅设置');
 
-        /* 🚀 UI 排版优化：动态注入 CSS Grid 布局代码 🚀 */
+        /* 🚀 0. 终极排版魔法：注入 CSS 和 JS 独立分栏与按钮位移脚本 🚀 */
         o = s.taboption('subscription', form.DummyValue, '_ui_optimization');
         o.rawhtml = true;
         o.default = `
         <style>
-            /* 1. 将订阅设置面板改为两列均分 Grid 布局 */
-            #cbi-homeproxy-subscription-subscription {
-                display: grid !important;
-                grid-template-columns: 1fr 1fr;
-                column-gap: 40px;
-                align-items: start;
-                padding-top: 15px;
-            }
+            /* 隐藏脚本代码占位符 */
+            #cbi-homeproxy-subscription-_ui_optimization { display: none !important; }
             
-            /* 强制子元素占满自己的一列 */
-            #cbi-homeproxy-subscription-subscription > .cbi-value {
-                grid-column: span 1;
-            }
+            /* 让机场表格彻底撑满屏幕 */
+            #cbi-homeproxy-subscription-_airports { max-width: none !important; width: 100%; }
 
-            /* 2. 机场管理表格和底部操作按钮独占一整行 */
-            #cbi-homeproxy-subscription-_ui_optimization,
-            #cbi-homeproxy-subscription-_airports,
-            #cbi-homeproxy-subscription-_legacy_notice,
-            #cbi-homeproxy-subscription-_save_subscriptions,
-            #cbi-homeproxy-subscription-_update_subscriptions,
-            #cbi-homeproxy-subscription-_rebuild_groups,
-            #cbi-homeproxy-subscription-_remove_subscriptions {
-                grid-column: 1 / -1 !important;
-            }
+            /* 消除原生标题的默认底边距，使其更紧凑 */
+            .hp-native-title { margin-top: 10px !important; margin-bottom: 15px !important; border: none !important; }
+        </style>
+        <img src="x" style="display:none" onerror="
+            let img = this;
+            setTimeout(function() {
+                img.remove();
 
-            /* 3. 机场管理表格变窄并靠左 (视觉约束) */
-            #cbi-homeproxy-subscription-_airports {
-                max-width: 1050px; 
-                justify-self: start;
-                width: 100%;
-            }
-            
-            /* 分割线与按钮边距微调 */
-            #cbi-homeproxy-subscription-_save_subscriptions {
-                margin-top: 15px;
-                padding-top: 20px;
-                border-top: 1px solid var(--border-color, #eee);
-            }
-        </style>`;
+                /* ==========================================
+                   魔法 1：顶部全局与高级设置的物理左右分栏
+                   ========================================== */
+                let divider = document.getElementById('cbi-homeproxy-subscription-_divider_main');
+                if (divider && !document.querySelector('.hp-layout-row')) {
+                    let row = document.createElement('div');
+                    row.className = 'hp-layout-row';
+                    row.style.display = 'flex';
+                    row.style.gap = '50px';
+                    row.style.alignItems = 'flex-start';
+                    row.style.width = '100%';
 
-        o = s.taboption('subscription', form.Flag, 'auto_update', '自动更新',
-            '自动更新订阅节点和 Geo 数据。');
+                    let leftCol = document.createElement('div');
+                    leftCol.style.flex = '1';
+                    leftCol.style.minWidth = '0';
+                    
+                    let rightCol = document.createElement('div');
+                    rightCol.style.flex = '1';
+                    rightCol.style.minWidth = '0';
+
+                    row.appendChild(leftCol);
+                    row.appendChild(rightCol);
+
+                    // 左侧装载全局设置
+                    let leftIds = ['_left_title', 'auto_update', 'auto_update_time', 'update_via_proxy', 'filter_nodes', 'filter_keywords', 'user_agent', 'allow_insecure', 'packet_encoding'];
+                    // 右侧仅保留高级设置
+                    let rightIds = ['_right_title', 'global_regions'];
+
+                    leftIds.forEach(id => {
+                        let el = document.getElementById('cbi-homeproxy-subscription-' + id);
+                        if (el) leftCol.appendChild(el);
+                    });
+
+                    rightIds.forEach(id => {
+                        let el = document.getElementById('cbi-homeproxy-subscription-' + id);
+                        if (el) rightCol.appendChild(el);
+                    });
+
+                    // 将左右分栏插入到分割线的正上方
+                    divider.parentNode.insertBefore(row, divider);
+                }
+
+                /* ==========================================
+                   魔法 2：把四个操作按钮搬到下方『添加订阅』按钮旁边
+                   ========================================== */
+                let airportsSection = document.getElementById('cbi-homeproxy-subscription-_airports');
+                if (airportsSection) {
+                    let createRow = airportsSection.querySelector('.cbi-section-create');
+                    if (createRow) {
+                        // 改为 Flex 布局，横向排列
+                        createRow.style.display = 'flex';
+                        createRow.style.gap = '12px';
+                        createRow.style.alignItems = 'center';
+                        createRow.style.flexWrap = 'wrap';
+                        createRow.style.marginTop = '10px';
+
+                        // 精准抓取我们要搬运的 4 个实际按钮元素
+                        let btnSave = document.querySelector('#cbi-homeproxy-subscription-_save_subscriptions button, #cbi-homeproxy-subscription-_save_subscriptions input[type=\\'button\\']');
+                        let btnUpdate = document.querySelector('#cbi-homeproxy-subscription-_update_subscriptions button, #cbi-homeproxy-subscription-_update_subscriptions input[type=\\'button\\']');
+                        let btnRebuild = document.querySelector('#cbi-homeproxy-subscription-_rebuild_groups button, #cbi-homeproxy-subscription-_rebuild_groups input[type=\\'button\\']');
+                        let btnRemove = document.querySelector('#cbi-homeproxy-subscription-_remove_subscriptions button, #cbi-homeproxy-subscription-_remove_subscriptions input[type=\\'button\\']');
+                        
+                        // 把它们追加到『添加订阅』按钮的后面
+                        if (btnSave) createRow.appendChild(btnSave);
+                        if (btnUpdate) createRow.appendChild(btnUpdate);
+                        if (btnRebuild) createRow.appendChild(btnRebuild);
+                        if (btnRemove) createRow.appendChild(btnRemove);
+
+                        // 隐藏它们原来留下来的空壳容器，防止占用空白空间
+                        ['#cbi-homeproxy-subscription-_save_subscriptions',
+                         '#cbi-homeproxy-subscription-_update_subscriptions',
+                         '#cbi-homeproxy-subscription-_rebuild_groups',
+                         '#cbi-homeproxy-subscription-_remove_subscriptions'].forEach(id => {
+                            let el = document.querySelector(id);
+                            if (el) el.style.display = 'none';
+                        });
+                    }
+                }
+            }, 200);
+        " />`;
+
+        /* =================================================================
+           🌟 顶部第一部分：左侧 - 全局设置
+           ================================================================= */
+        o = s.taboption('subscription', form.DummyValue, '_left_title', '');
+        o.rawhtml = true;
+        o.default = '<h3 class="panel-title hp-native-title">⚙️ 全局设置</h3>';
+
+        o = s.taboption('subscription', form.Flag, 'auto_update', '自动更新', '自动更新订阅节点和 Geo 数据。');
         o.rmempty = false;
 
         o = s.taboption('subscription', form.ListValue, 'auto_update_time', '更新时间');
@@ -1271,15 +1332,52 @@ return view.extend({
         o.default = '2';
         o.depends('auto_update', '1');
 
-        o = s.taboption('subscription', form.Flag, 'update_via_proxy', '使用代理更新',
-            '通过当前的代理网络更新订阅。');
+        o = s.taboption('subscription', form.Flag, 'update_via_proxy', '使用代理更新', '通过当前的代理网络更新订阅。');
         o.rmempty = false;
+
+        o = s.taboption('subscription', form.ListValue, 'filter_nodes', '过滤节点 (全局)');
+        o.value('disabled', '禁用');
+        o.value('blacklist', '黑名单模式');
+        o.value('whitelist', '白名单模式');
+        o.default = 'disabled';
+        o.rmempty = false;
+
+        o = s.taboption('subscription', form.DynamicList, 'filter_keywords', '过滤关键词 (全局)');
+        o.depends({'filter_nodes': 'disabled', '!reverse': true});
+        o.rmempty = false;
+
+        o = s.taboption('subscription', form.Value, 'user_agent', 'User-Agent (用户代理)');
+        o.placeholder = 'Wget/1.21 (HomeProxy, like v2rayN)';
+
+        o = s.taboption('subscription', form.Flag, 'allow_insecure', '允许不安全连接',
+            '强制开启不安全连接。Trojan/VLESS等现代协议将严格遵循订阅自身设置。');
+        o.rmempty = false;
+        o.onchange = allowInsecureConfirm;
+
+        o = s.taboption('subscription', form.ListValue, 'packet_encoding', '默认包封装格式');
+        o.value('', '无');
+        o.value('packetaddr', 'packet addr (v2ray-core v5+)');
+        o.value('xudp', 'Xudp (Xray-core)');
+
+        /* =================================================================
+           🌟 顶部第二部分：右侧 - 高级操作
+           ================================================================= */
+        o = s.taboption('subscription', form.DummyValue, '_right_title', '');
+        o.rawhtml = true;
+        o.default = '<h3 class="panel-title hp-native-title">🛠️ 顶级区域组设置</h3>';
 
         o = s.taboption('subscription', form.DynamicList, 'global_regions', '顶级自动区域组',
             '指定要生成的顶级 Auto 组（如 <b>HK</b>, <b>US</b>）。<br/>如果留空，将自动为您机场规则中发现的所有区域生成顶级组。');
         o.rmempty = true;
 
-        /* 🚀 全新汉化可视化机场管理面板 🚀 */
+        /* 分割线：用于隔开顶部的两栏配置和底部的机场表格 */
+        o = s.taboption('subscription', form.DummyValue, '_divider_main', '');
+        o.rawhtml = true;
+        o.default = '<hr style="margin: 10px 0 30px 0; border: 0; border-top: 1px dashed #ccc;" />';
+
+        /* =================================================================
+           🌟 底部主体：订阅管理表格 (占满全宽)
+           ================================================================= */
         o = s.taboption('subscription', form.SectionValue, '_airports', form.GridSection, 'subscription_airport', 
             '订阅管理 (Airports Management)', 
             '在此管理您的订阅。支持<b>拖拽排序</b>，排序决定底层节点组的命名后缀（如 hk01, hk02）。');
@@ -1300,16 +1398,12 @@ return view.extend({
         so.rmempty = false;
         so.modalonly = true;
 
-        so = o.subsection.option(form.DynamicList, 'region_group', '区域正则规则', 
+        so = o.subsection.option(form.DynamicList, 'region_group', '底层区域组正则规则', 
             '格式: <code>区域名称|关键字1,关键字2</code> (例如 <b>HK|香港,HK</b>)。如果只填 <b>US</b>，则区域和关键字均为 US。');
-        //so.modalonly = true;
 
-        // 🌟 终极逻辑：顶级组区域白名单 (默认拒绝)
         so = o.subsection.option(form.DynamicList, 'top_level_whitelist', '参与顶级组 (区域白名单)', 
             '严格控制该机场是否有资格参与顶级自动组（⚡ Auto）。<br/><b>留空 (默认)</b>：不参与任何顶级组。<br/><b>填写区域代码 (如 HK)</b>：仅允许参与指定的顶级组。<br/><b>填写 <code>*</code> </b>：无限制，允许参与所有顶级组。');
-        //so.modalonly = true;
 
-        /* 🌟 快捷操作：带实时日志终端的遮罩层 */
         so = o.subsection.option(form.DummyValue, '_update_single', '快捷操作');
         so.modalonly = false;
         so.textvalue = function(section_id) {
@@ -1320,15 +1414,11 @@ return view.extend({
                     ev.preventDefault();  
                     ev.stopPropagation(); 
                     
-                    let status_txt = E('p', { 'class': 'spinning', 'style': 'font-weight:bold; margin-bottom:10px;' }, '正在跨国拉取节点并重组，请耐心等待...');
+                    let status_txt = E('p', { 'class': 'spinning', 'style': 'font-weight:bold; margin-bottom:10px;' }, '正在拉取节点并重组，请耐心等待...');
                     let log_pre = E('pre', {
                         'style': 'width: 100%; height: 250px; overflow-y: auto; background: #1e1e1e; color: #4af626; padding: 10px; font-family: monospace; font-size: 12px; border-radius: 4px; white-space: pre-wrap; word-wrap: break-word;'
                     }, '初始化更新引擎...\n');
-                    let close_btn = E('button', {
-                        'class': 'cbi-button cbi-button-action',
-                        'style': 'display: none; margin-top: 15px;',
-                        'click': ui.hideModal
-                    }, '关闭');
+                    let close_btn = E('button', { 'class': 'cbi-button cbi-button-action', 'style': 'display: none; margin-top: 15px;', 'click': ui.hideModal }, '关闭');
 
                     ui.showModal('🔄 正在更新订阅', [ status_txt, log_pre, close_btn ]);
 
@@ -1347,14 +1437,11 @@ return view.extend({
                         clearInterval(log_timer);
                         let match = res.match(/FETCH_SUCCESS:(\d+)/);
                         let countMsg = match ? `共拉取了 ${match[1]} 个有效节点。` : '';
-                        
                         status_txt.className = '';
                         status_txt.style.color = '#28a745'; 
                         status_txt.innerHTML = `✅ 更新并重组成功！${countMsg}<br/>将在 2 秒后刷新页面...`;
-                        
                         log_pre.textContent += `\n\n[SYSTEM] --- 任务执行完毕 ---`;
                         log_pre.scrollTop = log_pre.scrollHeight;
-
                         setTimeout(() => { location.reload(); }, 2000);
                     }).catch((err) => {
                         clearInterval(log_timer);
@@ -1370,61 +1457,25 @@ return view.extend({
             }, '更新订阅'); 
         };
 
-        // 屏蔽旧版输入框提示
-        o = s.taboption('subscription', form.DummyValue, '_legacy_notice', '');
-        o.rawhtml = true;
-        o.default = '<div style="margin-top: 15px; padding: 10px; background: #fff3cd; border-left: 4px solid #ffeeba;"><b>提示:</b> 旧版的单行 URL 列表已被废弃，请统一在上方表格中管理机场。</div>';
-
-        o = s.taboption('subscription', form.ListValue, 'filter_nodes', '过滤节点 (全局)');
-        o.value('disabled', '禁用');
-        o.value('blacklist', '黑名单模式');
-        o.value('whitelist', '白名单模式');
-        o.default = 'disabled';
-        o.rmempty = false;
-
-        o = s.taboption('subscription', form.DynamicList, 'filter_keywords', '过滤关键词 (全局)');
-        o.depends({'filter_nodes': 'disabled', '!reverse': true});
-        o.rmempty = false;
-
-        o = s.taboption('subscription', form.Value, 'user_agent', 'User-Agent (用户代理)');
-        o.placeholder = 'Wget/1.21 (HomeProxy, like v2rayN)';
-
-        o = s.taboption('subscription', form.Flag, 'allow_insecure', '允许不安全连接 (TLS Insecure)',
-            '对老式协议（VMess/SS等）强制开启不安全连接。Trojan/VLESS等现代协议将严格遵循订阅链接自身设置。');
-        o.rmempty = false;
-        o.onchange = allowInsecureConfirm;
-
-        o = s.taboption('subscription', form.ListValue, 'packet_encoding', '默认包封装格式');
-        o.value('', '无');
-        o.value('packetaddr', 'packet addr (v2ray-core v5+)');
-        o.value('xudp', 'Xudp (Xray-core)');
-
-        /* 全局操作按钮区 */
-        o = s.taboption('subscription', form.Button, '_save_subscriptions', '保存订阅设置');
+        /* =================================================================
+           🌟 按钮区 (它们会被顶部的 JS 魔法搬走，放到"添加"按钮旁边)
+           ================================================================= */
+        o = s.taboption('subscription', form.Button, '_save_subscriptions', '保存订阅');
         o.inputstyle = 'apply';
-        o.onclick = function() {
-            return this.map.save(null, true).then(() => { ui.changes.apply(true); });
-        }
+        o.onclick = function() { return this.map.save(null, true).then(() => { ui.changes.apply(true); }); }
 
-        /* 🌟 1. 🌐 全局更新所有机场按钮 (接入实时日志弹窗) */
-        o = s.taboption('subscription', form.Button, '_update_subscriptions', '🌐 更新所有订阅');
+        o = s.taboption('subscription', form.Button, '_update_subscriptions', '更新全部订阅');
         o.inputstyle = 'apply';
         o.onclick = function() {
             return this.map.save(null, true).then(() => {
                 let status_txt = E('p', { 'class': 'spinning', 'style': 'font-weight:bold; margin-bottom:10px;' }, '正在执行全局更新，请稍候...');
-                let log_pre = E('pre', {
-                    'style': 'width: 100%; height: 250px; overflow-y: auto; background: #1e1e1e; color: #4af626; padding: 10px; font-family: monospace; font-size: 12px; border-radius: 4px; white-space: pre-wrap; word-wrap: break-word;'
-                }, '准备更新订阅...\n');
-                let close_btn = E('button', { 'class': 'cbi-button cbi-button-action', 'style': 'display: none; margin-top: 15px;', 'click': ui.hideModal }, '关闭');
-
+                let log_pre = E('pre', { 'style': 'width:100%;height:250px;overflow-y:auto;background:#1e1e1e;color:#4af626;padding:10px;font-family:monospace;font-size:12px;border-radius:4px;white-space:pre-wrap;word-wrap:break-word;' }, '准备更新订阅...\n');
+                let close_btn = E('button', { 'class': 'cbi-button cbi-button-action', 'style': 'display:none;margin-top:15px;', 'click': ui.hideModal }, '关闭');
                 ui.showModal('🔄 全局订阅更新', [ status_txt, log_pre, close_btn ]);
 
                 let log_timer = setInterval(() => {
                     fs.exec_direct('tail', ['-n', '15', '/var/run/homeproxy/homeproxy.log']).then((log_data) => {
-                        if (log_data && log_pre.textContent !== log_data) {
-                            log_pre.textContent = log_data;
-                            log_pre.scrollTop = log_pre.scrollHeight;
-                        }
+                        if (log_data && log_pre.textContent !== log_data) { log_pre.textContent = log_data; log_pre.scrollTop = log_pre.scrollHeight; }
                     }).catch(() => {});
                 }, 1000);
 
@@ -1432,88 +1483,65 @@ return view.extend({
                     clearInterval(log_timer);
                     let match = res.match(/FETCH_SUCCESS:(\d+)/);
                     let countMsg = match ? `总共拉取/验证了 ${match[1]} 个有效节点。` : '';
-                    
-                    status_txt.className = '';
-                    status_txt.style.color = '#28a745';
+                    status_txt.className = ''; status_txt.style.color = '#28a745';
                     status_txt.innerHTML = `✅ 全局更新并重组成功！${countMsg}<br/>将在 2 秒后刷新页面...`;
-                    
-                    log_pre.textContent += `\n\n[SYSTEM] --- 全局任务执行完毕 ---`;
-                    log_pre.scrollTop = log_pre.scrollHeight;
-
+                    log_pre.textContent += `\n\n[SYSTEM] --- 全局任务执行完毕 ---`; log_pre.scrollTop = log_pre.scrollHeight;
                     setTimeout(() => { location.reload(); }, 2000);
                 }).catch((err) => {
                     clearInterval(log_timer);
-                    status_txt.className = '';
-                    status_txt.style.color = '#dc3545';
+                    status_txt.className = ''; status_txt.style.color = '#dc3545';
                     status_txt.innerHTML = `❌ 全局更新失败！`;
-                    log_pre.style.color = '#dc3545';
-                    log_pre.textContent += `\n\n[FATAL ERROR] ${err}`;
+                    log_pre.style.color = '#dc3545'; log_pre.textContent += `\n\n[FATAL ERROR] ${err}`;
                     close_btn.style.display = 'inline-block';
                 });
             });
         };
 
-        /* 🌟 2. ⚡ 极速重组本地节点组按钮 (接入实时日志弹窗) */
         o = s.taboption('subscription', form.Button, '_rebuild_groups', '⚡ 极速重组本地节点组');
         o.inputstyle = 'action';
-        o.inputtitle = '重组节点组';
-        o.description = '当你仅修改了"排序、顶级组、正则规则"时使用。不消耗流量下载，秒级生效。';
+        o.inputtitle = '重组本地节点组';
+        o.description = ''; // 按钮并排显示，隐藏描述避免凌乱
         o.onclick = function() {
             return this.map.save(null, true).then(() => {
                 let status_txt = E('p', { 'class': 'spinning', 'style': 'font-weight:bold; margin-bottom:10px;' }, '正在从本地缓存重组节点组...');
-                let log_pre = E('pre', {
-                    'style': 'width: 100%; height: 250px; overflow-y: auto; background: #1e1e1e; color: #4af626; padding: 10px; font-family: monospace; font-size: 12px; border-radius: 4px; white-space: pre-wrap; word-wrap: break-word;'
-                }, '开始本地重构任务...\n');
-                let close_btn = E('button', { 'class': 'cbi-button cbi-button-action', 'style': 'display: none; margin-top: 15px;', 'click': ui.hideModal }, '关闭');
-
+                let log_pre = E('pre', { 'style': 'width:100%;height:250px;overflow-y:auto;background:#1e1e1e;color:#4af626;padding:10px;font-family:monospace;font-size:12px;border-radius:4px;white-space:pre-wrap;word-wrap:break-word;' }, '开始本地重构任务...\n');
+                let close_btn = E('button', { 'class': 'cbi-button cbi-button-action', 'style': 'display:none;margin-top:15px;', 'click': ui.hideModal }, '关闭');
                 ui.showModal('⚡ 极速重组节点组', [ status_txt, log_pre, close_btn ]);
 
                 let log_timer = setInterval(() => {
                     fs.exec_direct('tail', ['-n', '15', '/var/run/homeproxy/homeproxy.log']).then((log_data) => {
-                        if (log_data && log_pre.textContent !== log_data) {
-                            log_pre.textContent = log_data;
-                            log_pre.scrollTop = log_pre.scrollHeight;
-                        }
+                        if (log_data && log_pre.textContent !== log_data) { log_pre.textContent = log_data; log_pre.scrollTop = log_pre.scrollHeight; }
                     }).catch(() => {});
                 }, 1000);
 
-                // 极速重组直接运行 generate_node_groups.uc
                 return fs.exec_direct('ucode', ['/etc/homeproxy/scripts/generate_node_groups.uc']).then((res) => {
                     clearInterval(log_timer);
-                    
-                    status_txt.className = '';
-                    status_txt.style.color = '#28a745';
-                    status_txt.innerHTML = `✅ 节点组本地重组完成！已根据最新规则更新配置。<br/>将在 1.5 秒后刷新页面...`;
-                    
-                    log_pre.textContent += `\n\n[SYSTEM] --- 重组任务执行完毕 ---`;
-                    log_pre.scrollTop = log_pre.scrollHeight;
-
+                    status_txt.className = ''; status_txt.style.color = '#28a745';
+                    status_txt.innerHTML = `✅ 节点组本地重组完成！<br/>将在 1.5 秒后刷新页面...`;
+                    log_pre.textContent += `\n\n[SYSTEM] --- 重组任务执行完毕 ---`; log_pre.scrollTop = log_pre.scrollHeight;
                     setTimeout(() => { location.reload(); }, 1500);
                 }).catch((err) => {
                     clearInterval(log_timer);
-                    status_txt.className = '';
-                    status_txt.style.color = '#dc3545';
+                    status_txt.className = ''; status_txt.style.color = '#dc3545';
                     status_txt.innerHTML = `❌ 重组失败！`;
-                    log_pre.style.color = '#dc3545';
-                    log_pre.textContent += `\n\n[FATAL ERROR] ${err}`;
+                    log_pre.style.color = '#dc3545'; log_pre.textContent += `\n\n[FATAL ERROR] ${err}`;
                     close_btn.style.display = 'inline-block';
                 });
             });
         };
 
-        o = s.taboption('subscription', form.Button, '_remove_subscriptions', '🗑️ 移除所有订阅节点');
+        o = s.taboption('subscription', form.Button, '_remove_subscriptions', '移除全部订阅节点');
         o.inputstyle = 'reset';
         o.onclick = function() {
             let subnodes = [];
-            uci.sections(data[0], 'node', (res) => {
-                if (res.airport_id || res.grouphash) subnodes = subnodes.concat(res['.name'])
-            });
+            uci.sections(data[0], 'node', (res) => { if (res.airport_id || res.grouphash) subnodes = subnodes.concat(res['.name']) });
             for (let i in subnodes) uci.remove(data[0], subnodes[i]);
             if (subnodes.includes(uci.get(data[0], 'config', 'main_node'))) uci.set(data[0], 'config', 'main_node', 'nil');
             this.inputtitle = '已移除 ' + subnodes.length + ' 个节点';
             this.readonly = true;
             return this.map.save(null, true);
         }
+
         /* === Subscriptions settings end === */
 
         /* === Node settings start (退居二线) === */

@@ -22,16 +22,17 @@ include $(TOPDIR)/feeds/luci/luci.mk
 
 # 🌟 核心改进：直接在标准安装流程中定义权限
 define Package/luci-app-homeproxy/install
-	# 调用默认安装流程
-	$(call Package/luci-app-homeproxy/Default/install,$(1))
-	
-	# 显式创建目录并安装脚本，使用 $(INSTALL_BIN) 宏（系统会自动赋予 0755）
-	$(INSTALL_DIR) $(1)/etc/homeproxy/scripts
-	$(INSTALL_BIN) ./root/etc/homeproxy/scripts/hp_assets.sh $(1)/etc/homeproxy/scripts/hp_assets.sh
-	$(INSTALL_BIN) ./root/etc/homeproxy/scripts/hp_kernel.sh $(1)/etc/homeproxy/scripts/hp_kernel.sh
-	
-	$(INSTALL_DIR) $(1)/usr/share/homeproxy
-	$(INSTALL_BIN) ./root/etc/homeproxy/scripts/generate_node_groups.uc $(1)/etc/homeproxy/scripts/generate_node_groups.uc
+    # 调用默认安装流程
+    $(call Package/luci-app-homeproxy/Default/install,$(1))
+    
+    # 显式创建目录并安装脚本，使用 $(INSTALL_BIN) 宏（系统会自动赋予 0755）
+    $(INSTALL_DIR) $(1)/etc/homeproxy/scripts
+    $(INSTALL_BIN) ./root/etc/homeproxy/scripts/hp_assets.sh $(1)/etc/homeproxy/scripts/hp_assets.sh
+    $(INSTALL_BIN) ./root/etc/homeproxy/scripts/hp_kernel.sh $(1)/etc/homeproxy/scripts/hp_kernel.sh
+    $(INSTALL_BIN) ./root/etc/homeproxy/scripts/hp_notifier.sh $(1)/etc/homeproxy/scripts/hp_notifier.sh
+    
+    $(INSTALL_DIR) $(1)/usr/share/homeproxy
+    $(INSTALL_BIN) ./root/etc/homeproxy/scripts/generate_node_groups.uc $(1)/etc/homeproxy/scripts/generate_node_groups.uc
 endef
 
 # 🌟 保留 postinst 作为双重保险
@@ -40,6 +41,7 @@ define Package/luci-app-homeproxy/postinst
 if [ -z "$${IPKG_INSTROOT}" ]; then
     chmod 755 /etc/homeproxy/scripts/hp_assets.sh 2>/dev/null
     chmod 755 /etc/homeproxy/scripts/hp_kernel.sh 2>/dev/null
+    chmod 755 /etc/homeproxy/scripts/hp_notifier.sh 2>/dev/null
     chmod 755 /etc/homeproxy/scripts/generate_node_groups.uc 2>/dev/null
     
     # 物理注册 UCI
