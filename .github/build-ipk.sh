@@ -74,7 +74,7 @@ default_postinst
 
     # 2. 物理注册 UCI
     if ! uci -q get homeproxy.assets >/dev/null; then
-        uci set homeproxy.assets=assets
+        uci set homeproxy.assets=homeproxy
         uci set homeproxy.assets.auto_update='\''1'\''
         uci set homeproxy.assets.update_time='\''4'\''
         uci commit homeproxy
@@ -116,7 +116,7 @@ default_postinst
 
     # 2. 物理注册 UCI
     if ! uci -q get homeproxy.assets >/dev/null; then
-        uci set homeproxy.assets=assets
+        uci set homeproxy.assets=homeproxy
         uci set homeproxy.assets.auto_update='\''1'\''
         uci set homeproxy.assets.update_time='\''4'\''
         uci commit homeproxy
