@@ -94,6 +94,8 @@ if (routing_mode !== 'custom') {
     dns_client_subnet = uci.get(uciconfig, ucidnssetting, 'client_subnet');
     cache_file_store_rdrc = uci.get(uciconfig, ucidnssetting, 'cache_file_store_rdrc'),
     cache_file_rdrc_timeout = uci.get(uciconfig, ucidnssetting, 'cache_file_rdrc_timeout');
+    // 🌟 新增：读取手动 DNS 管道模式开关
+    let manual_dns_pipeline = uci.get(uciconfig, ucidnssetting, 'manual_dns_pipeline');
 
     /* Routing settings */
     default_outbound = uci.get(uciconfig, uciroutingsetting, 'default_outbound') || 'nil';
@@ -421,25 +423,6 @@ if (!isEmpty(main_node)) {
     config.dns.final = 'main-dns';
 } else if (!isEmpty(default_outbound)) {
 
-    /* 🚀 精准提取 local_dns_tag 和 remote_dns_tag 🚀 */
-    let local_dns_tag = get_resolver(dns_default_server) || 'default-dns';
-    let remote_dns_tag = get_resolver(default_outbound_dns) || 'main-dns';
-
-    uci.foreach(uciconfig, ucidnsrule, (cfg) => {
-        if (cfg.enabled !== '1') return;
-        let rule_set_array = (type(cfg.rule_set) === 'array') ? cfg.rule_set : (cfg.rule_set ? [cfg.rule_set] : []);
-        for (let i = 0; i < length(rule_set_array); i++) {
-            let val = rule_set_array[i];
-            if (val === 'geositecn' || val === 'geoipcn' || val === 'geositeprivatedirect') {
-                let s = get_resolver(cfg.server);
-                if (s) local_dns_tag = s;
-            } else if (val === 'geositenoncn' || val === 'geositeapple') {
-                let s = get_resolver(cfg.server);
-                if (s) remote_dns_tag = s;
-            }
-        }
-    });
-
     /* UI Configured DNS Servers */
     uci.foreach(uciconfig, ucidnsserver, (cfg) => {
         if (cfg.enabled !== '1') return;
@@ -485,6 +468,7 @@ if (!isEmpty(main_node)) {
             rule_set: get_ruleset(cfg.rule_set),
             invert: strToBool(cfg.invert),
             action: cfg.action,
+            match_response: (cfg.action === 'route') ? strToBool(cfg.match_response) : null,
             server: get_resolver(cfg.server),
             disable_cache: strToBool(cfg.dns_disable_cache),
             rewrite_ttl: strToInt(cfg.rewrite_ttl),
@@ -497,17 +481,6 @@ if (!isEmpty(main_node)) {
             extra: cfg.predefined_extra
         });
     });
-
-    /* 🚀 Pure Smart Tail Injection 🚀 */
-    
-    let pure_evaluate_tail = [
-        { action: 'evaluate', server: remote_dns_tag },
-        { action: 'route', match_response: true, rule_set: active_geoip_cn_tag, server: local_dns_tag },
-        { action: 'respond' }
-    ];
-
-    if (!config.dns.rules) config.dns.rules = [];
-    config.dns.rules = [...config.dns.rules, ...pure_evaluate_tail];
 
     /* Ultimate Fallback: Strictly read from [DNS settings -> default_server] */
     config.dns.final = get_resolver(dns_default_server) || 'default-dns';
