@@ -285,7 +285,7 @@ function parse_uri(uri) {
 }
 
 // ============================================================================
-// 🚀 核心改造引擎：支持单机场更新 & 彻底解决 Insecure 原生提取
+// 🚀 核心改造引擎：支持单机场更新 & 彻底解决 Insecure 原生提取 & 修复节点污染
 // ============================================================================
 function main() {
     if (via_proxy !== '1') {
@@ -320,14 +320,16 @@ function main() {
         let url = airport.url;
         let airport_id = airport['.name'];
         let airport_name = airport.name || airport_id;
-        
-        node_cache[airport_id] = {};
 
         const res = wGET(url, user_agent);
         if (isEmpty(res)) {
-            log(sprintf('Failed to fetch resources from Airport [%s].', airport_name));
+            // 🌟 核心修复：如果拉取失败，直接跳过。旧节点会被完美保留，绝不串台！
+            log(sprintf('Failed to fetch resources from Airport [%s]. Retaining old nodes.', airport_name));
             continue;
         }
+
+        // 🌟 核心修复：只有成功拉取到订阅后，才初始化这个机场的缓存！
+        node_cache[airport_id] = {};
 
         let nodes;
         try {
@@ -357,8 +359,6 @@ function main() {
             } else if (node_cache[airport_id][confHash] || node_cache[airport_id][nameHash]) {
                 // 去重
             } else {
-                // 🌟 最终防线：无论什么协议，如果页面强行勾选了允许不安全，且它带 TLS，就无脑打勾。
-                // (日常使用时，你只要在网页上保持全局“允许不安全连接”关闭，系统就会 100% 还原机场原始配置)
                 if (config.tls === '1' && allow_insecure === '1') {
                     config.tls_insecure = '1';
                 }
@@ -367,8 +367,8 @@ function main() {
 
                 config.airport_id = airport_id;
                 
-                push(node_result, []);
-                push(node_result[length(node_result)-1], config);
+                // 🌟 修复：扁平化存储，避免数据结构紊乱
+                push(node_result, config);
                 node_cache[airport_id][confHash] = config;
                 node_cache[airport_id][nameHash] = config;
                 count++;
@@ -381,8 +381,8 @@ function main() {
         else log(sprintf('Successfully fetched %s nodes from Airport [%s].', count, airport_name));
     }
 
-    if (isEmpty(node_result)) {
-        log('Failed to update subscriptions: no valid node found.');
+    if (isEmpty(node_result) && total_fetched === 0) {
+        log('Failed to update subscriptions: no valid node found across all attempts.');
         if (via_proxy !== '1') init_action('homeproxy', 'start');
         print("FETCH_SUCCESS:0\n"); 
         return false;
@@ -391,7 +391,7 @@ function main() {
     let added = 0, removed = 0;
     uci.foreach(uciconfig, ucinode, (cfg) => {
         if (!cfg.airport_id) return null; 
-        if (!node_cache[cfg.airport_id]) return null; 
+        if (!node_cache[cfg.airport_id]) return null; // 🌟 遇到没下载成功的机场，直接忽略清理，保护老节点！
 
         if (!node_cache[cfg.airport_id][cfg['.name']]) {
             uci.delete(uciconfig, cfg['.name']);
@@ -405,26 +405,24 @@ function main() {
         }
     });
 
-    for (let nodes in node_result) {
-        map(nodes, (node) => {
-            if (node.isExisting) return null;
-            const nameHash = md5(node.airport_id + '|' + node.label);
-            uci.set(uciconfig, nameHash, 'node');
-            map(keys(node), (v) => uci.set(uciconfig, nameHash, v, node[v]));
-            added++;
-        });
+    // 🌟 修复：适配扁平化的 node_result 数组
+    for (let _n = 0; _n < length(node_result); _n++) {
+        let node = node_result[_n];
+        if (node.isExisting) continue;
+        const nameHash = md5(node.airport_id + '|' + node.label);
+        uci.set(uciconfig, nameHash, 'node');
+        map(keys(node), (v) => uci.set(uciconfig, nameHash, v, node[v]));
+        added++;
     }
     
     uci.commit(uciconfig);
     log(sprintf('%s nodes added, %s removed.', added, removed));
 
-    // 🌟 向前端喊话
     print(sprintf("FETCH_SUCCESS:%d\n", total_fetched));
 
     log('Triggering Dynamic Node Groups Generation...');
     let gen_ret = system('ucode /etc/homeproxy/scripts/generate_node_groups.uc');
     
-    // 5. 重启/恢复服务逻辑
     let need_restart = (via_proxy !== '1');
     if (!isEmpty(main_node)) {
         if (!uci.get(uciconfig, main_node)) {
