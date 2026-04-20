@@ -1,6 +1,6 @@
 #!/bin/sh
 # --- [ HomeProxy Native: 规则资产管理引擎 (Assets Engine) ] ---
-# 职责：规则集下载、增量更新、断网自愈、TG通知、动态回滚、UCI自动注册
+# 职责：规则集下载、增量更新、断网自愈、对接公共监控告警、动态回滚、UCI自动注册
 
 export PATH='/usr/sbin:/usr/bin:/sbin:/bin'
 export LD_LIBRARY_PATH='/usr/lib:/lib'
@@ -23,9 +23,6 @@ SRC_PRIVATE=$(uci -q get homeproxy.assets.private_repo)
 LOCATION_NAME=$(uci -q get homeproxy.assets.location_name)
 [ -z "$LOCATION_NAME" ] && LOCATION_NAME="HomeProxy"
 
-TG_BOT_TOKEN=$(uci -q get homeproxy.assets.tg_bot_token)
-TG_CHAT_ID=$(uci -q get homeproxy.assets.tg_chat_id)
-
 # ==========================================
 # 2. 核心工具库 (Utils)
 # ==========================================
@@ -34,13 +31,6 @@ log_info()    { printf "${C_INFO}[INFO]${C_RESET} %s\n" "$1"; }
 log_success() { printf "${C_OK}[SUCCESS]${C_RESET} %s\n" "$1"; }
 log_warn()    { printf "${C_WARN}[WARN]${C_RESET} %s\n" "$1"; }
 log_err()     { printf "${C_ERR}[ERROR]${C_RESET} %s\n" "$1"; }
-
-tg_send() {
-    [ -z "$TG_BOT_TOKEN" ] || [ -z "$TG_CHAT_ID" ] && return 0
-    local msg="$1"
-    curl -sk -X POST "https://api.telegram.org/bot$TG_BOT_TOKEN/sendMessage" \
-        -d "chat_id=$TG_CHAT_ID" -d "parse_mode=HTML" -d "text=$msg" > /dev/null 2>&1 &
-}
 
 safe_download() {
     local url="$1"; local dest="$2"
@@ -87,7 +77,7 @@ fetch_to_temp() {
     return 1
 }
 
-# 🌟 新增：智能 UCI 注册挂载点
+# 🌟 智能 UCI 注册挂载点
 auto_inject_uci() {
     local name="$1"
     local file_path="$RULE_DIR/${name}.srs"
@@ -138,10 +128,7 @@ download_manual() {
         if fetch_to_temp "$name" "$temp_path" >/dev/null; then
             mv "$temp_path" "$final_path"
             log_success "✅ 入库成功: $name"
-            
-            # 🌟 触发自动注册钩子
             auto_inject_uci "$name"
-            
         else
             log_err "❌ 下载失败: $name (请检查名称或网络)"
         fi
@@ -174,7 +161,7 @@ update_all() {
                 local old_md5=$(md5sum "$live_path" | awk '{print $1}')
                 if [ "$new_md5" != "$old_md5" ]; then
                     update_count=$((update_count + 1))
-                    change_log="${change_log}%0A🔹 <b>$name</b> (已更新)"
+                    change_log="${change_log}<br>🔹 <b>$name</b> (已更新)"
                     mv "$temp_file" "$live_path"
                     log_success "更新完成: $name"
                 else
@@ -183,47 +170,49 @@ update_all() {
                 fi
             else
                 update_count=$((update_count + 1))
-                change_log="${change_log}%0A✨ <b>$name</b> (新入库)"
+                change_log="${change_log}<br>✨ <b>$name</b> (新入库)"
                 mv "$temp_file" "$live_path"
                 log_success "新入库: $name"
             fi
         else
             fail_count=$((fail_count + 1))
-            change_log="${change_log}%0A❌ <b>$name</b> (下载失败)"
+            change_log="${change_log}<br>❌ <b>$name</b> (下载失败)"
             log_err "下载失败: $name"
         fi
     done < "$TEMP_DIR/list.txt"
 
     local status_msg=""
+    local final_status="success"
+
     if [ "$update_count" -gt 0 ]; then
         if [ "$mode" = "auto" ] || [ "$mode" = "manual" ]; then
             log_info "触发 HomeProxy 服务重启以应用新规则..."
             if /etc/init.d/homeproxy restart; then
-                status_msg="%0A♻️ 服务重启: <b>成功</b>"
+                status_msg="<br>♻️ 服务重启: <b>成功</b>"
                 log_success "服务已成功重启并加载最新规则。"
-                log_info "等待 15 秒以便代理网络稳固，准备发送战报..."
-                sleep 15
             else
                 log_err "重启失败！新规则可能存在致命错误！"
                 log_warn "触发紧急回滚机制..."
                 restore_rules
                 /etc/init.d/homeproxy restart
-                status_msg="%0A🛡️ 重启失败，已自动执行<b>安全回滚</b>并恢复服务。"
-                log_info "等待 15 秒以便回滚网络稳固，准备发送战报..."
-                sleep 15
+                status_msg="<br>🛡️ 重启失败，已自动执行<b>安全回滚</b>并恢复服务。"
+                final_status="fail"
             fi
         fi
     else
         log_info "所有规则集均是最新版本。"
-        status_msg="%0A💤 所有规则集均是最新版本，无需更新。"
+        status_msg="<br>💤 所有规则集均是最新版本，无需更新。"
     fi
 
-    local msg="📊 <b>[${LOCATION_NAME}] 规则巡检报告</b>%0A"
-    msg="${msg}--------------------------------%0A"
-    msg="${msg}📦 更新数量: <b>$update_count</b>%0A"
-    [ -n "$change_log" ] && msg="${msg}📝 详细清单: ${change_log}%0A"
+    # 🌟 组合发送给传令官的消息内容
+    local msg="📊 <b>巡检报告</b><br>"
+    msg="${msg}--------------------------------<br>"
+    msg="${msg}📦 成功更新数量: <b>$update_count</b><br>"
+    [ -n "$change_log" ] && msg="${msg}📝 详细清单: ${change_log}<br>"
     msg="${msg}${status_msg}"
-    tg_send "$msg"
+
+    # 🌟 调用统一公共监控接口发送 TG 通知 (后台异步执行)
+    sh /etc/homeproxy/scripts/hp_notifier.sh "ruleset" "$final_status" "$msg" &
 }
 
 # ==========================================
@@ -232,6 +221,11 @@ update_all() {
 case "$1" in
     --update)   update_all "$2" ;;
     --download) shift; download_manual "$@" ;;
-    --restore)  restore_rules; /etc/init.d/homeproxy restart ;;
+    --restore)  
+        restore_rules
+        /etc/init.d/homeproxy restart 
+        # 回滚也顺便发个通知
+        sh /etc/homeproxy/scripts/hp_notifier.sh "ruleset" "fail" "已执行手动紧急物理回滚，旧规则已恢复。" &
+        ;;
     *) echo "Usage: $0 {--update [auto/manual] | --download <name1> <name2> | --restore}" ;;
 esac
