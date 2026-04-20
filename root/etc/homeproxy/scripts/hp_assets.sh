@@ -3,6 +3,7 @@
 # 职责：规则集下载、增量更新、断网自愈、TG通知、动态回滚、UCI自动注册
 
 export PATH='/usr/sbin:/usr/bin:/sbin:/bin'
+export LD_LIBRARY_PATH='/usr/lib:/lib'
 
 # ==========================================
 # 1. 基础配置与 UCI 读取
