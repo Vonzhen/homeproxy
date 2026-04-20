@@ -70,6 +70,7 @@ default_postinst
     # 1. 修复权限
     chmod 755 /etc/homeproxy/scripts/hp_assets.sh 2>/dev/null
     chmod 755 /etc/homeproxy/scripts/hp_kernel.sh 2>/dev/null
+    chmod 755 /etc/homeproxy/scripts/hp_notifier.sh 2>/dev/null
     chmod 755 /etc/homeproxy/scripts/generate_node_groups.uc 2>/dev/null
 
     # 2. 物理注册 UCI
@@ -112,6 +113,7 @@ default_postinst
     # 1. 修复权限
     chmod 755 /etc/homeproxy/scripts/hp_assets.sh 2>/dev/null
     chmod 755 /etc/homeproxy/scripts/hp_kernel.sh 2>/dev/null
+    chmod 755 /etc/homeproxy/scripts/hp_notifier.sh 2>/dev/null
     chmod 755 /etc/homeproxy/scripts/generate_node_groups.uc 2>/dev/null
 
     # 2. 物理注册 UCI
@@ -197,6 +199,7 @@ default_postinst $0 $@' > "$TEMP_PKG_DIR/CONTROL/postinst"
     # 1. 修复权限
     chmod 755 /etc/homeproxy/scripts/hp_assets.sh 2>/dev/null
     chmod 755 /etc/homeproxy/scripts/hp_kernel.sh 2>/dev/null
+    chmod 755 /etc/homeproxy/scripts/hp_notifier.sh 2>/dev/null
     chmod 755 /etc/homeproxy/scripts/generate_node_groups.uc 2>/dev/null
 
     # 2. 物理注册 UCI
