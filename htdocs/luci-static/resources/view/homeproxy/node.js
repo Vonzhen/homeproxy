@@ -1302,12 +1302,12 @@ return view.extend({
 
         so = o.subsection.option(form.DynamicList, 'region_group', '区域正则规则', 
             '格式: <code>区域名称|关键字1,关键字2</code> (例如 <b>HK|香港,HK</b>)。如果只填 <b>US</b>，则区域和关键字均为 US。');
-        so.modalonly = true;
+        //so.modalonly = true;
 
         // 🌟 终极逻辑：顶级组区域白名单 (默认拒绝)
         so = o.subsection.option(form.DynamicList, 'top_level_whitelist', '参与顶级组 (区域白名单)', 
             '严格控制该机场是否有资格参与顶级自动组（⚡ Auto）。<br/><b>留空 (默认)</b>：不参与任何顶级组。<br/><b>填写区域代码 (如 HK)</b>：仅允许参与指定的顶级组。<br/><b>填写 <code>*</code> </b>：无限制，允许参与所有顶级组。');
-        so.modalonly = true;
+        //so.modalonly = true;
 
         /* 🌟 快捷操作：带实时日志终端的遮罩层 */
         so = o.subsection.option(form.DummyValue, '_update_single', '快捷操作');
