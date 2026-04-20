@@ -38,14 +38,27 @@ endef
 define Package/luci-app-homeproxy/postinst
 #!/bin/sh
 if [ -z "$${IPKG_INSTROOT}" ]; then
-	chmod 755 /etc/homeproxy/scripts/hp_assets.sh 2>/dev/null
-	chmod 755 /etc/homeproxy/scripts/hp_kernel.sh 2>/dev/null
-	chmod 755 /etc/homeproxy/scripts/generate_node_groups.uc 2>/dev/null
-	# 物理注册 UCI
-	if ! uci -q get homeproxy.assets >/dev/null; then
-		uci set homeproxy.assets=assets
-		uci commit homeproxy
-	fi
+    chmod 755 /etc/homeproxy/scripts/hp_assets.sh 2>/dev/null
+    chmod 755 /etc/homeproxy/scripts/hp_kernel.sh 2>/dev/null
+    chmod 755 /etc/homeproxy/scripts/generate_node_groups.uc 2>/dev/null
+    
+    # 物理注册 UCI
+    if ! uci -q get homeproxy.assets >/dev/null; then
+        uci set homeproxy.assets=assets
+        uci set homeproxy.assets.auto_update='1'
+        uci set homeproxy.assets.update_time='4'
+        uci commit homeproxy
+    fi
+
+    # 🌟 新增：IPK 安装时自动初始化计划任务
+    touch /etc/crontabs/root
+    sed -i '/hp_assets.sh/d' /etc/crontabs/root 2>/dev/null
+    if [ "$(uci -q get homeproxy.assets.auto_update)" = "1" ]; then
+        TIME=$(uci -q get homeproxy.assets.update_time || echo "4")
+        echo "0 $TIME * * * /bin/sh /etc/homeproxy/scripts/hp_assets.sh --update auto > /var/log/hp_assets_cron.log 2>&1" >> /etc/crontabs/root
+        echo "" >> /etc/crontabs/root
+    fi
+    /etc/init.d/cron restart
 fi
 exit 0
 endef
