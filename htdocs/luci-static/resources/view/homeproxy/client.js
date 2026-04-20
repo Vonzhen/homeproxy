@@ -75,24 +75,16 @@ let stubValidator = {
 
 return view.extend({
     load() {
-        /* 🚀 强力初始化补丁：解决权限丢失与 UI 空白问题 */
-        return L.resolveDefault(L.fs.exec_direct('sh', ['-c', `
-            # 1. 强制物理注册 UCI 节点（防止页面空白）
-            if ! uci -q get homeproxy.assets >/dev/null; then
-                uci set homeproxy.assets=assets
-                uci commit homeproxy
-            fi
-            # 2. 强制修复脚本执行权限
-            chmod +x /etc/homeproxy/scripts/hp_assets.sh 2>/dev/null
-            chmod +x /etc/homeproxy/scripts/hp_kernel.sh 2>/dev/null
-            chmod +x /etc/homeproxy/scripts/generate_node_groups.uc 2>/dev/null
-        `]), {}).then(() => {
-            /* 执行原本的加载逻辑 */
-            return Promise.all([
-                uci.load('homeproxy'),
-                hp.getBuiltinFeatures(),
-                network.getHostHints()
-            ]);
+        return Promise.all([
+            uci.load('homeproxy'),
+            hp.getBuiltinFeatures(),
+            network.getHostHints()
+        ]).then(responses => {
+            /* 🌟 核心防御：如果配置里没有 assets 节点，直接内存注册，防止页面空白 */
+            if (!uci.get('homeproxy', 'assets')) {
+                uci.set('homeproxy', 'assets', 'assets');
+            }
+            return responses;
         });
     },
 
@@ -889,6 +881,8 @@ return view.extend({
         o.depends('routing_mode', 'custom');
 
         ss = o.subsection;
+        so.default = '0';
+        so.rmempty = false;
         so = ss.option(form.ListValue, 'default_strategy', _('Default DNS strategy'),
             _('The DNS strategy for resolving the domain name in the address.'));
         for (let i in hp.dns_strategy)
@@ -1060,6 +1054,62 @@ return view.extend({
 
         /* DNS rules start */
         s.tab('dns_rule', _('DNS Rules'));
+
+        // 🌟 新增：显式的全透明提示横幅
+        o = s.taboption('dns_rule', form.DummyValue, '_dns_transparent_notice', '');
+        o.depends('routing_mode', 'custom');
+        o.rawhtml = true;
+        o.default = '<div style="padding: 12px 15px; margin-bottom: 15px; background-color: #e8f4f8; border-left: 4px solid #17a2b8; border-radius: 4px; color: #333; line-height: 1.5;"><b>💡 Sing-box 1.14 以上版本专属特性 (全透明模式)：</b><br/>已支持 evaluate 评估规则动作。强烈建议点击下方按钮生成<b>【智能分流底包】</b>，并在其上方添加您的自定义规则（例如去广告）。</div>';
+
+        // 🌟 魔法按钮：直接显示，无需开关前提
+        o = s.taboption('dns_rule', form.DummyValue, '_magic_st_btn', _('快速向导'));
+        o.depends('routing_mode', 'custom');
+        o.description = '一键导入智能分流模板作为基础底包。';
+        o.renderWidget = function(section_id) {
+            return E('button', {
+                'class': 'btn cbi-button cbi-button-apply',
+                'click': function(ev) {
+                    ev.preventDefault();
+                    if (!confirm('⚠️ 确定要生成智能分流底包吗？\n生成后，请务必将这 3 条新规则移动至列表的最下方（即最后执行）！')) return;
+                    
+                    L.require('fs').then(fs => {
+                        let cmd = `
+                            uci -q delete homeproxy.dns_rule_st_eval
+                            uci -q delete homeproxy.dns_rule_st_route
+                            uci -q delete homeproxy.dns_rule_st_resp
+                            uci add homeproxy dns_rule
+                            uci rename homeproxy.@dns_rule[-1]="dns_rule_st_eval"
+                            uci set homeproxy.dns_rule_st_eval.label="远端评估"
+                            uci set homeproxy.dns_rule_st_eval.enabled="1"
+                            uci set homeproxy.dns_rule_st_eval.action="evaluate"
+                            uci set homeproxy.dns_rule_st_eval.server="main-dns"
+                            
+                            uci add homeproxy dns_rule
+                            uci rename homeproxy.@dns_rule[-1]="dns_rule_st_route"
+                            uci set homeproxy.dns_rule_st_route.label="命中回档"
+                            uci set homeproxy.dns_rule_st_route.enabled="1"
+                            uci set homeproxy.dns_rule_st_route.action="route"
+                            uci set homeproxy.dns_rule_st_route.match_response="1"
+                            uci add_list homeproxy.dns_rule_st_route.rule_set="geoipcn"
+                            uci set homeproxy.dns_rule_st_route.server="default-dns"
+                            
+                            uci add homeproxy dns_rule
+                            uci rename homeproxy.@dns_rule[-1]="dns_rule_st_resp"
+                            uci set homeproxy.dns_rule_st_resp.label="最终响应"
+                            uci set homeproxy.dns_rule_st_resp.enabled="1"
+                            uci set homeproxy.dns_rule_st_resp.action="respond"
+                            
+                            uci commit homeproxy
+                        `;
+                        fs.exec_direct('sh', ['-c', cmd]).then(() => {
+                            alert('✅ 模板生成成功！页面即将刷新。');
+                            location.reload();
+                        });
+                    });
+                }
+            }, '一键生成 evaluate 模板');
+        };
+
         o = s.taboption('dns_rule', form.SectionValue, '_dns_rule', form.GridSection, 'dns_rule');
         o.depends('routing_mode', 'custom');
 
@@ -1158,14 +1208,23 @@ return view.extend({
             _('Invert match result.'));
         so.modalonly = true;
 
+        // 🌟 动作核心扩展：加入 evaluate 和 respond
         so = ss.taboption('field_other', form.ListValue, 'action', _('Action'));
         so.value('route', _('Route'));
+        so.value('evaluate', _('Evaluate (评估)'));
+        so.value('respond', _('Respond (响应)'));
         so.value('route-options', _('Route options'));
         so.value('reject', _('Reject'));
         so.value('predefined', _('Predefined'));
         so.default = 'route';
         so.rmempty = false;
         so.editable = true;
+
+        // 🌟 新增：Match response (仅在 route 时显示)
+        so = ss.taboption('field_other', form.Flag, 'match_response', _('Match response (匹配响应)'),
+            _('开启后，将根据上级 <code>evaluate</code> 动作返回结果的 IP 进行目标匹配。<br/>通常配合 Rule Set (如 geoipcn) 使用。'));
+        so.depends('action', 'route');
+        so.modalonly = true;
 
         so = ss.taboption('field_other', form.ListValue, 'server', _('Server'),
             _('Tag of the target dns server.'));
@@ -1185,6 +1244,7 @@ return view.extend({
         so.rmempty = false;
         so.editable = true;
         so.depends('action', 'route');
+        so.depends('action', 'evaluate'); // 让 evaluate 也能选服务器
 
         so = ss.taboption('field_other', form.ListValue, 'domain_strategy', _('Domain strategy'),
             _('Set domain strategy for this query.'));
@@ -1375,14 +1435,19 @@ return view.extend({
             });
         };
 
-        /* 用于联动更新 Crontab 的通用回调 */
+        /* 用于联动更新 Crontab 的通用回调 (增强版) */
         let sync_cron_job = function(section_id, ctx) {
             let is_auto = ctx.section.formvalue(section_id, 'auto_update');
             let update_time = ctx.section.formvalue(section_id, 'update_time') || '4';
             let cron_time = `0 ${update_time} * * *`;
+            
+            // 🌟 核心改进：
+            // 1. 追加 >> /var/log/hp_assets_cron.log 2>&1 记录运行日志，告别盲人摸象。
+            // 2. 强制 echo "" 增加空行，避开 OpenWrt cron 不读最后一行的世纪 Bug。
             let cron_cmd = (is_auto === '1') ? 
-                `sed -i '/hp_assets.sh/d' /etc/crontabs/root 2>/dev/null; echo "${cron_time} /bin/sh /etc/homeproxy/scripts/hp_assets.sh --update auto" >> /etc/crontabs/root; /etc/init.d/cron restart` :
+                `touch /etc/crontabs/root; sed -i '/hp_assets.sh/d' /etc/crontabs/root 2>/dev/null; echo "${cron_time} /bin/sh /etc/homeproxy/scripts/hp_assets.sh --update auto > /var/log/hp_assets_cron.log 2>&1" >> /etc/crontabs/root; echo "" >> /etc/crontabs/root; /etc/init.d/cron restart` :
                 `sed -i '/hp_assets.sh/d' /etc/crontabs/root 2>/dev/null; /etc/init.d/cron restart`;
+                
             L.require('fs').then(fs => fs.exec_direct('sh', ['-c', cron_cmd]));
         };
 
