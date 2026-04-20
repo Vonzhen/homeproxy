@@ -218,7 +218,9 @@ default_postinst $0 $@' > "$TEMP_PKG_DIR/CONTROL/postinst"
     fi
     /etc/init.d/cron restart 2>/dev/null || true
 
-    (. /etc/uci-defaults/$PKG_NAME) && rm -f /etc/uci-defaults/$PKG_NAME
+    # 🌟 修复后的安全执行逻辑
+    [ -f \"/etc/uci-defaults/$PKG_NAME\" ] && { sh \"/etc/uci-defaults/$PKG_NAME\" && rm -f \"/etc/uci-defaults/$PKG_NAME\"; }
+    
     rm -f /tmp/luci-indexcache
     rm -rf /tmp/luci-modulecache/
     exit 0
