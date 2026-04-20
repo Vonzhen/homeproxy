@@ -184,6 +184,7 @@ update_all() {
     local status_msg=""
     local final_status="success"
 
+    # 🌟 修复：增加对 fail_count 的判断逻辑
     if [ "$update_count" -gt 0 ]; then
         if [ "$mode" = "auto" ] || [ "$mode" = "manual" ]; then
             log_info "触发 HomeProxy 服务重启以应用新规则..."
@@ -199,19 +200,24 @@ update_all() {
                 final_status="fail"
             fi
         fi
+    elif [ "$fail_count" -gt 0 ]; then
+        # 🌟 当有失败任务时，正确识别为更新异常
+        log_warn "部分或全部规则集下载失败！"
+        status_msg="<br>⚠️ <b>更新异常</b>：存在 $fail_count 个下载失败的任务，请检查网络或更换镜像源。"
+        final_status="fail"
     else
         log_info "所有规则集均是最新版本。"
         status_msg="<br>💤 所有规则集均是最新版本，无需更新。"
     fi
 
-    # 🌟 组合发送给传令官的消息内容
+    # 🌟 组合发送给传令官的消息内容 (增加显示失败数量)
     local msg="📊 <b>巡检报告</b><br>"
     msg="${msg}--------------------------------<br>"
-    msg="${msg}📦 成功更新数量: <b>$update_count</b><br>"
+    msg="${msg}📦 成功更新: <b>$update_count</b> | ❌ 失败: <b>$fail_count</b><br>"
     [ -n "$change_log" ] && msg="${msg}📝 详细清单: ${change_log}<br>"
     msg="${msg}${status_msg}"
 
-    # 🌟 调用统一公共监控接口发送 TG 通知 (后台异步执行)
+    # 🌟 调用统一公共监控接口发送 TG 通知
     sh /etc/homeproxy/scripts/hp_notifier.sh "ruleset" "$final_status" "$msg" &
 }
 
