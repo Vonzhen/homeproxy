@@ -368,22 +368,16 @@ return view.extend({
         o = s.option(form.Value, 'tg_token', 'Bot Token', '填入你的 TG 机器人 Token。');
         o.password = true;
         o.depends('tg_notify_enabled', '1');
-        
-        // 我们也为 Token 输入框加一个保存按钮，方便直接提交测试
-        o.renderWidget = function() {
-            let node = form.Value.prototype.renderWidget.apply(this, arguments);
-            (node.querySelector('.control-group') || node).appendChild(E('button', {
-                'class': 'cbi-button cbi-button-apply',
-                'title': '保存',
-                'click': ui.createHandlerFn(this, () => {
-                    return this.map.save(null, true).then(() => { ui.changes.apply(true); });
-                }, this.option)
-            }, [ '保存' ]));
-            return node;
-        }
 
         o = s.option(form.Value, 'tg_chat_id', 'Chat ID', '填入接收消息的频道或用户 ID。');
         o.depends('tg_notify_enabled', '1');
+
+        // 🌟 修复：新增独立的保存按钮，不再依附于 Token，永远显示！
+        o = s.option(form.Button, '_save_tg_btn', '保存通知设置');
+        o.inputstyle = 'apply';
+        o.onclick = function() {
+            return this.map.save(null, true).then(() => { ui.changes.apply(true); });
+        }
         /* ========================================================= */
         /* 🚀 📢 统一消息中心：Telegram 告警配置 - 结束 🚀 */
         /* ========================================================= */
