@@ -1059,7 +1059,7 @@ return view.extend({
         o = s.taboption('dns_rule', form.DummyValue, '_dns_transparent_notice', '');
         o.depends('routing_mode', 'custom');
         o.rawhtml = true;
-        o.default = '<div style="padding: 12px 15px; margin-bottom: 15px; background-color: #e8f4f8; border-left: 4px solid #17a2b8; border-radius: 4px; color: #333; line-height: 1.5;"><b>💡 Sing-box 1.14 以上版本专属特性 (全透明模式)：</b><br/>已支持 evaluate 评估规则动作。强烈建议点击下方按钮生成<b>【智能分流底包】</b>，并在其上方添加您的自定义规则（例如去广告）。</div>';
+        o.default = '<div style="padding: 12px 15px; margin-bottom: 15px; background-color: #e8f4f8; border-left: 4px solid #17a2b8; border-radius: 4px; color: #333; line-height: 1.5;"><b>💡 Sing-box 1.14 以上版本专属特性 (全透明模式)：</b><br/>已支持 evaluate 评估规则动作。建议点击下方按钮生成<b>【智能分流底包】</b>，并在其上方添加您的自定义规则（例如指定去广告）。</div>';
 
         // 🌟 魔法按钮：直接显示，无需开关前提
         o = s.taboption('dns_rule', form.DummyValue, '_magic_st_btn', _('快速向导'));
@@ -1441,9 +1441,6 @@ return view.extend({
             let update_time = ctx.section.formvalue(section_id, 'update_time') || '4';
             let cron_time = `0 ${update_time} * * *`;
             
-            // 🌟 核心改进：
-            // 1. 追加 >> /var/log/hp_assets_cron.log 2>&1 记录运行日志，告别盲人摸象。
-            // 2. 强制 echo "" 增加空行，避开 OpenWrt cron 不读最后一行的世纪 Bug。
             let cron_cmd = (is_auto === '1') ? 
                 `touch /etc/crontabs/root; sed -i '/hp_assets.sh/d' /etc/crontabs/root 2>/dev/null; echo "${cron_time} /bin/sh /etc/homeproxy/scripts/hp_assets.sh --update auto > /var/log/hp_assets_cron.log 2>&1" >> /etc/crontabs/root; echo "" >> /etc/crontabs/root; /etc/init.d/cron restart` :
                 `sed -i '/hp_assets.sh/d' /etc/crontabs/root 2>/dev/null; /etc/init.d/cron restart`;
@@ -1455,12 +1452,7 @@ return view.extend({
         so = ss.option(form.DummyValue, '_header_1', '');
         so.rawhtml = true;
         so.default = '<div style="padding: 8px 15px; margin-top: 10px; margin-bottom: 20px; background-color: #f8f9fa; border-left: 4px solid #17a2b8; border-radius: 4px; font-weight: bold; color: #333; font-size: 15px;">⚙️ 基础配置</div>';
-
-        // 🌟 新增：节点展示名称
-        so = ss.option(form.Value, 'location_name', _('节点名称'), '用于在 Telegram 通知中区分不同的路由器。');
-        so.default = 'HomeProxy';
-        so.placeholder = '如：家里主路由、公司软路由';
-
+     
         so = ss.option(form.Value, 'base_url', _('镜像源 URL'), '公有库下载源，推荐使用 jsDelivr 或国内加速源。');
         so.default = 'https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing';
         so.placeholder = 'https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing';
@@ -1476,7 +1468,6 @@ return view.extend({
             return res;
         };
 
-        // 🌟 优化：将生硬的 Cron 改为每日小时选择器
         so = ss.option(form.ListValue, 'update_time', _('每日更新时间'), '设定自动更新在每天的几点执行。');
         for (let i = 0; i < 24; i++) so.value(i, i + ':00');
         so.default = '4';
@@ -1486,11 +1477,11 @@ return view.extend({
             sync_cron_job(section_id, this);
             return res;
         };
-
-        so = ss.option(form.Value, 'tg_bot_token', _('TG Bot Token'), 'Telegram 机器人令牌 (可选，用于战报推送)。');
-        so.password = true;
-
-        so = ss.option(form.Value, 'tg_chat_id', _('TG Chat ID'), '接收通知的频道或用户 ID。');
+        
+        // 🌟 新增：优雅的跨模块配置引导提示横幅
+        so = ss.option(form.DummyValue, '_tg_notice', '');
+        so.rawhtml = true;
+        so.default = '<div style="margin-top: 15px; padding: 10px; background-color: #e8f4f8; border-left: 4px solid #17a2b8; color: #333; font-size: 13px;">💡 <b>如需Telegram 自动化通知，请前往 <b>「服务状态」->「内核管理」</b> 页面下方，进行全局 TG 机器人配置。</div>';
 
         /* -- 手动入库区块 -- */
         so = ss.option(form.DummyValue, '_header_2', '');
@@ -1500,7 +1491,6 @@ return view.extend({
         so = ss.option(form.DummyValue, '_manual_pull_ui', _('规则集名称'));
         so.description = '支持同时输入多个规则集名称，请用<b>逗号或换行</b>分隔。<br/>脚本会自动从配置的源批量拉取资产文件。';
         so.renderWidget = function(section_id, option_index, cfgvalue) {
-            // 🌟 优化：将单行输入框改为多行文本框 Textarea
             return E('div', { 'style': 'display:flex; align-items:flex-start;' }, [
                 E('textarea', { 
                     'id': 'manual_rule_name_input', 
@@ -1516,7 +1506,6 @@ return view.extend({
                         let val = document.getElementById('manual_rule_name_input').value.trim();
                         if (!val) { alert('请输入要下载的规则集名称！'); return; }
                         
-                        // 🌟 将用户的逗号、换行全部替换为单空格，拼装成多参数供 Shell 执行
                         let clean_args = val.replace(/[\n,]/g, ' ').replace(/\s+/g, ' ');
                         runAssetsTerminal('--download', clean_args, '📥 正在执行批量入库任务...');
                     }
